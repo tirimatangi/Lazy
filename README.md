@@ -7,10 +7,10 @@ Eric Niebler proposes a fast stack-allocated replacement for futures and promise
 [in his talk](https://www.youtube.com/watch?v=tF-Nz4aRWAM) at CppCon 2019 (the good bits start at 13:00).
 
 _**Lazy**_ is an enhanced version of the core code he presents in the slides on the video.
-The name stems the future-like objects which employ lazy evaluation.
+The name stems from the future-like objects which employ lazy evaluation.
 With Lazy you can run any number of tasks in parallel and attach any number of continuations.
 Heap allocation is needed only if the the return value of a function is a vector.
-It is an entirely header-only library and it requires a C++17 compiler.
+It is an entirely header-only library and it should work with any C++17 compiler.
 
 Should any parallel operation throw, the exception can be caught normally.
 You can also use rudimentary stop tokens for letting a parallel task tell the other parallel tasks that their work is no longer needed.
