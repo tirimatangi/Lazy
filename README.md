@@ -94,7 +94,7 @@ std::size_t indexOf(const Vec& vec,
 //...
 {
     std::vector<int> vec(1000);
-    // Fill in the vector with some values
+    // Fill the vector with some values
     for (int i = 0; i < vec.size(); ++i)
         vec[i] = i;
 
@@ -109,7 +109,7 @@ std::size_t indexOf(const Vec& vec,
 
     // Run the finder in parallel using 4 threads.
     // A StopToken object is created automatically by the library
-    // because the finder takes one as the first argument.
+    // because the finder takes a pointer to a Stoptoken as the first argument.
 
     auto vecIndex = Lazy::runForAll({std::pair{0, 250}, {250, 500}, {500, 750}, {750, 1000}}, finder);
 
