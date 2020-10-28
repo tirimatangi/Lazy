@@ -133,7 +133,7 @@ You can define the futures and the continuations they will run manually.
 The first function in the chain of continuations can have any number of input parameters which are passed to function `Lazy::future<ReturnType>(...)`.
 `ReturnType` is the return type of the last function in the chain of continuations (like in std::future).
 
-Here is an example on lauching the tasks and getting the results once they are available.
+Here is an example on launching the tasks and getting the results once they become available.
 
 ```c++
     // Define future #1:
@@ -200,7 +200,7 @@ The output will be
 Calling f.run...
 Calling g.run...
 Future f returned 8.88819
-Future g returned {2 4 8 16 32 64 128 256 512 1024 }
+Future g returned { 2 4 8 16 32 64 128 256 512 1024 }
 ```
 For more examples on how to use `Lazy::future` manually, see [example-3.cc](example-3.cc).
 
