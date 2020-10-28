@@ -67,6 +67,8 @@ Notice that if the input were an `std::array<int, 4>` instead of `std::vector<in
 the output would be an `std::array<double, 4>` instead of `std::vector<double>`.
 There are no heap allocations if the input is an `std::array`.
 
+If the return type of your function is void, you can use a dummy type (e.g. `nullptr` and ignore the output vector. See example 2.5 in [example-2.cc](example-2.cc).
+
 By default, the maximum number of parallel threads running at any time is the number of cores+1.
 You can set the maximum manually with template argument, for example `auto vecOutput = Lazy::runForAll<128>(vecInput, ...);`
 
