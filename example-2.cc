@@ -60,6 +60,13 @@ uint16_t intSqrt(uint32_t x)
   return uint16_t(uS);
 }
 
+void myVoidFunction(int n)
+{
+  for(int i=0; i < n; ++i) {
+    atomic_print("myVoidFunction says (", i, '/', n, ')');
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
 
 int main()
 {
@@ -184,4 +191,14 @@ int main()
       for (auto i = 0; i < N; ++i)
         std::cout << i << ": index range [" << aPairs[i].first << ","<< aPairs[i].second << "] : found at index = " << int(vecIndex[i]) << "\n";
     }
+
+    // Example 2.5: Call a void function by using a dummy return value. The return value can be ignored.
+    std::cout << "\n*** Example 2.5 *** : A void function can be called by using dummy return type.\n";
+    {
+        std::vector<int> vecIn;
+        for(int n = 1; n <= 5; ++n)
+            vecIn.push_back(n);
+        // Use nullptr_t as the dummy return type
+        Lazy::runForAll(vecIn, [](auto n) { myVoidFunction(n); return nullptr;});
+    }    
 }
