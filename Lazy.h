@@ -506,8 +506,8 @@ void pretty_function(const T& t)
     // std::cout << "pretty_function = " << __PRETTY_FUNCTION__ << "\n";
 }
 
-// Executes "y = func(x)" for each x in vector vecX in a separate thread.
-// returns a vector of y's. The maxmum number of parallel threads is MaxThreads.
+// Executes "y = func(x)" for each x in vector vecX in a lock-free thread pool.
+// Returns a vector of y's. The maxmum number of parallel threads is MaxThreads.
 // If MaxThreads <= 0, use the number of cores.
 template <int MaxThreads = 0, class Vec, class Func>
 auto runForAll(const Vec& vecX, Func&& func)
@@ -519,60 +519,52 @@ auto runForAll(const Vec& vecX, Func&& func)
   constexpr bool bOneParam = std::is_invocable_v<Func, U>;
   if constexpr (bOneParam)
     {
-      using T = decltype(func(std::declval<U>()));  // output type
-      using Fut = decltype(future<T>(std::declval<U>()).then(func).finalize(std::declval<SyncCore*>())); // Future type
-
-      // A slot is a position of a future and a state in the corresponding vectors.
-      // There are as many slots as there are parallel threads running.
-      unsigned iNumSlots = (MaxThreads <= 0) ? std::thread::hardware_concurrency() + 1 : MaxThreads;
-      iNumSlots = std::min(iNumSlots, unsigned(vecX.size()));
+      using T = decltype(func(std::declval<U>()));  // output type (must be default constructible)
 
       std::vector<T> vecY(vecX.size()); // Result vector
-      std::vector<SyncCore> vecCores(iNumSlots);
-      std::vector<ResultWatcher> vecWatchers(iNumSlots);
-      // Vector of finalized slots and the corresponding input indices.
-      // Slot tells where in vecFutures vector lives a pointer to the future
-      // which is processing input vecX[index]
-      std::vector<std::pair<int, int>> vecSlotIndex; // Vector of finalized {slot,index}-pairs.
-      vecSlotIndex.reserve(iNumSlots);
-      std::vector<std::unique_ptr<Fut>> vecFutures(iNumSlots);
-      std::mutex mtx; // Mutex which protects vecSlotIndex
-      std::condition_variable cv;
-      std::vector<SyncState<T>*> vecStates;
-      vecStates.reserve(iNumSlots);
+      std::exception_ptr pException;
+      std::atomic_size_t szExceptionCount {0}; // Number of tasks that have tried to raise an exception.
+      std::atomic_size_t szNumStartedTasks {0}; // Number of tasks that have either finished or running.
+      auto worker = [&]() {  // Worker to run in each thread in the thread pool.
+        do {
+          auto szIndex = szNumStartedTasks.fetch_add(1);
+          if (szIndex < vecX.size()) { // There are vecX.size() tasks to run in total
+            try {
+              vecY[szIndex] = func(vecX[szIndex]);
+            }
+            catch (...) {
+              auto szExceptionsSoFar = szExceptionCount.fetch_add(1);
+              if (szExceptionsSoFar == 0) // Only one exception will be stored
+                pException = std::current_exception();
+            }
+          } // if
+        } while (szNumStartedTasks.load() <= vecX.size());
+      };  // worker
 
-      unsigned iNumTasksStarted, iNumTasksFinished = 0;
+      if constexpr (MaxThreads > 0) { // Threadpool is an array of threads living in stack.
+        std::array<std::thread, MaxThreads> aThreadPool;
+        for (auto& thr : aThreadPool)
+            thr = std::thread(worker);
 
-      // Start the first iNumSlots tasks
-      for (iNumTasksStarted = 0; iNumTasksStarted < iNumSlots; ++iNumTasksStarted) {
-        vecFutures[iNumTasksStarted] =
-          std::make_unique<Fut>(future<T>(vecX[iNumTasksStarted]).then(func).finalize(&vecCores[iNumTasksStarted]));
-        // Register callback to watch finalized tasks.
-        vecWatchers[iNumTasksStarted] = ResultWatcher{&mtx, &cv, &vecSlotIndex, {iNumTasksStarted, iNumTasksStarted}};
-        vecStates.emplace_back(vecFutures[iNumTasksStarted]->run(&vecWatchers[iNumTasksStarted]));
+        for(std::thread& thr : aThreadPool)
+            if (thr.joinable())
+            thr.join();
+      }
+      else { // Threadpool is a vector of threads living in heap.
+        auto uNumThreads = std::min(std::size_t(std::thread::hardware_concurrency()), vecX.size());
+        std::vector<std::thread> vecThreadPool(uNumThreads);
+        for (auto& thr : vecThreadPool)
+            thr = std::thread(worker);
+
+        for(std::thread& thr : vecThreadPool)
+            if (thr.joinable())
+            thr.join();
       }
 
-      // Wait for tasks to finish and reuse the slots to start new tasks
-      while (iNumTasksFinished < vecX.size())
-        {
-          std::unique_lock lck(mtx);
-          cv.wait(lck, [&vecSlotIndex]() { return !vecSlotIndex.empty(); });
-          for (auto [iSlot, iIndex] : vecSlotIndex)
-            {
-              // Retrieve the result
-              vecY[iIndex] = vecFutures[iSlot]->get(vecStates[iSlot]);
-              if (iNumTasksStarted < vecX.size())
-                { // Reuse the finished slot for a new task
-                  vecFutures[iSlot] =
-                    std::make_unique<Fut>(future<T>(vecX[iNumTasksStarted]).then(func).finalize(&vecCores[iSlot]));
-                  vecWatchers[iSlot] = ResultWatcher{&mtx, &cv, &vecSlotIndex, {iSlot, iNumTasksStarted}};
-                  vecStates[iSlot] = vecFutures[iSlot]->run(&vecWatchers[iSlot]);
-                  ++iNumTasksStarted;
-                }
-            } // for
-          iNumTasksFinished += vecSlotIndex.size();
-          vecSlotIndex.clear();
-        } // while
+      // Deal with possible exception
+      if (pException)
+        std::rethrow_exception(pException);
+
       return vecY;
     } // func takes one parameter
   else if constexpr (bStopTokenAndParam)
