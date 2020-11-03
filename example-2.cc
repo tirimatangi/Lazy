@@ -83,7 +83,7 @@ int main()
 
     {
         // Set vecOutput[i] = func(vecInput[i]) for each i running in a separate thread.
-        // The number of parallel threads will be limited to the number of cores + 1
+        // The number of parallel threads will be limited to the number of cores.
         // to avoid running the system out of resources.
         auto vecOutput = Lazy::runForAll(vecInput, intSqrt);
         std::cout << "2.1.1: Input vector length = " << vecInput.size() << ", output vector length = " << vecOutput.size() << "\n";
@@ -200,5 +200,5 @@ int main()
             vecIn.push_back(n);
         // Use nullptr_t as the dummy return type
         Lazy::runForAll(vecIn, [](auto n) { myVoidFunction(n); return nullptr;});
-    }    
+    }
 }

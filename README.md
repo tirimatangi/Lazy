@@ -44,6 +44,9 @@ For an example on how to use stop tokens to communicate between the functions, s
 #### 2. Vector in, vector out
 
 You can run a function or a set of continuations in parallel for each element of the input vector and get the results as a vector.
+By default, the maximum number of parallel threads in the thread pool is the number of cores in your machine.
+You can set the thread pool size manually with template argument, for example `auto vecOutput = Lazy::runForAll<128>(vecInput, ...);`
+
 Here is an example on running a sequence of 3 continuations where the inputs are in std::vector<int> and the output is an std::vector<double>.
 
 ```c++
@@ -68,9 +71,6 @@ the output would be an `std::array<double, 4>` instead of `std::vector<double>`.
 There are no heap allocations if the input is an `std::array`.
 
 If the return type of your function is `void`, you can use a dummy type (e.g. `nullptr`) and ignore the output vector. See example 2.5 in [example-2.cc](example-2.cc).
-
-By default, the maximum number of parallel threads running at any time is the number of cores+1.
-You can set the maximum manually with template argument, for example `auto vecOutput = Lazy::runForAll<128>(vecInput, ...);`
 
 Here is an example on how a function which gets ready first can abort the others using `Lazy::StopToken`.
 The task is to find a number from a vector using 4 parallel threads.
