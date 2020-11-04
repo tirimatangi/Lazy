@@ -72,7 +72,7 @@ There are no heap allocations if the input is an `std::array`.
 
 If the return type of your function is `void`, you can use a dummy type (e.g. `nullptr`) and ignore the output vector. See example 2.5 in [example-2.cc](example-2.cc).
 
-Here is an example on how a function which gets ready first can abort the others using `Lazy::StopToken`.
+Here is an example on how a function which gets ready first can abort the others by using `Lazy::StopToken`.
 The task is to find a number from a vector using 4 parallel threads.
 
 ```c++
