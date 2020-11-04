@@ -141,7 +141,6 @@ Here is an example on launching the tasks and getting the results once they beco
     // the last function returns a double.
     // The output of the last continuation will be sqrt(i^2 - 2*i - 1), where is the input
     // to the first continuation.
-
     int iInput = 10;  // Set iInput = 0 to raise an exception.
     auto f = Lazy::future<double>(iInput).
                 then([](auto i){ return std::vector{i * i, -2 * i, -1}; }).
@@ -151,7 +150,7 @@ Here is an example on launching the tasks and getting the results once they beco
                 finalize();
 
     // Define future #2:
-    // The function takes two parameters and
+    // The function takes two parameters (x, n) and
     // returns a vector which contains {x, x*x, ... x^n}.
     double dValue = 2.0;  // Set dValue=0 and iN = -1 to raise an exception.
     int iN = 10; // Negative iN means negative exponents.
