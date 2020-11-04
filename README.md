@@ -139,7 +139,7 @@ Here is an example on launching the tasks and getting the results once they beco
     // Define future #1:
     // The first function in the chain of continuations takes one parameter and
     // the last function returns a double.
-    // The output of the last continuation will be sqrt(i^2 - 2*i - 1), where is the input
+    // The output of the last continuation will be sqrt(i^2 - 2*i - 1), where i is the input
     // to the first continuation.
     int iInput = 10;  // Set iInput = 0 to raise an exception.
     auto f = Lazy::future<double>(iInput).
