@@ -230,7 +230,7 @@ auto makeNewThread(U1 u1, U2 u2)
 
 // Overload for several input arguments.
 // Note that now the arguments will be copied, not moved
-// because the capture list can not contain move(u)...
+// because the capture list can not contain move(u)... until C++20.
 template <class... U>
 auto makeNewThread(const U&... u)
 {
@@ -498,12 +498,15 @@ struct ResultWatcher
   }
 };
 
-// Debug helper
-template <class T>
-void pretty_function(const T& t)
+// Debug helper for finding out types T...
+template <class... T>
+void pretty_function(const T&...)
 {
-    (void)t;
-    // std::cout << "pretty_function = " << __PRETTY_FUNCTION__ << "\n";
+#if 0 // enable if iostream works in your system
+    std::stringstream ss;
+    ss << "pretty_function = " << __PRETTY_FUNCTION__ << "\n";
+    std::cout << ss.str();
+#endif
 }
 
 // Executes "y = func(x)" for each x in vector vecX in a lock-free thread pool.
@@ -548,7 +551,7 @@ auto runForAll(const Vec& vecX, Func&& func)
 
         for(std::thread& thr : aThreadPool)
             if (thr.joinable())
-            thr.join();
+              thr.join();
       }
       else { // Threadpool is a vector of threads living in heap.
         auto uNumThreads = std::min(std::size_t(std::thread::hardware_concurrency()), vecX.size());
@@ -558,7 +561,7 @@ auto runForAll(const Vec& vecX, Func&& func)
 
         for(std::thread& thr : vecThreadPool)
             if (thr.joinable())
-            thr.join();
+              thr.join();
       }
 
       // Deal with possible exception
@@ -614,7 +617,7 @@ auto runForAllInArray(const Arr& arrX, Func&& func, std::index_sequence<I...>)
 // Executes "y = func(x)" for each x in array arrX in a separate thread.
 // There will be as many parallel threads as there are elements in the array.
 // Returns an array of y's.
-template <class U, std::size_t N, class Func>
+template <int MaxThreads = 0, class U, std::size_t N, class Func>
 auto runForAll(const std::array<U, N>& arrX, Func&& func)
 {
   return runForAllInArray(arrX, std::forward<Func>(func), std::make_index_sequence<N>{});
@@ -653,11 +656,20 @@ auto nested(T t, F&& f, Fs&&... fs)
                                             for (int i = 0; i < numDecimals; ++i, r *= 10);
                                             return int(r * z);});
 */
-template <int MaxThreads = 0, class Vec, class... Funcs>
-auto runForAll(const Vec& x, Funcs&&... funcs)
+template <int MaxThreads = 0, class U, class... Funcs>
+auto runForAll(const std::vector<U>& x, Funcs&&... funcs)
 {
   auto nestedFuncs = [&funcs...](auto t) { return nested(t, funcs...); };
   return runForAll<MaxThreads>(x, nestedFuncs);
+}
+
+// Note: MaxThreads template parameter is ignored.
+// There are always as many threads as there are elements in the array.
+template <int MaxThreads = 0, class U, std::size_t N, class... Funcs>
+auto runForAll(const std::array<U, N>& arrX, Funcs&&... funcs)
+{
+  auto nestedFuncs = [&funcs...](auto t) { return nested(t, funcs...); };
+  return runForAll(arrX, nestedFuncs);
 }
 
 // Overload of the above function for initializer list input.

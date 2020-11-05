@@ -72,15 +72,20 @@ int main()
 {
     std::cout << "Hey! Your machine has " << std::thread::hardware_concurrency() << " cores!\n";
 
+    // Make input vector and input array
     int iVectorLength = 10 * std::thread::hardware_concurrency();
-
-    // Example 2.1: Call a function concurrently once for each element of the input vector and
-    //              store the results to the output vector.
-    std::cout << "\n*** Example 2.1 *** : Call a function for each value in the input vector.\n";
     std::vector<int> vecInput(iVectorLength);
     for (int i = 0; i < iVectorLength; ++i)
         vecInput[i] = 100 * i;
 
+    constexpr std::size_t szArrayLength = 100;
+    std::array<int, szArrayLength> arrInput;
+    for (std::size_t i = 0; i < szArrayLength; ++i)
+        arrInput[i] = 100 * i;
+
+    // Example 2.1: Call a function concurrently once for each element of the input vector and
+    //              store the results to the output vector.
+    std::cout << "\n*** Example 2.1 *** : Call a function for each value in the input vector.\n";
     {
         // Set vecOutput[i] = func(vecInput[i]) for each i running in a separate thread.
         // The number of parallel threads will be limited to the number of cores.
@@ -90,26 +95,33 @@ int main()
     }
     {
         // The number of parallel threads can also be given as a template parameter. Use 10 in this example.
-        std::vector<double> vecOutput = Lazy::runForAll<10>(vecInput, [](auto x) { return intSqrt(x * 100) * 0.1; });
+        auto vecOutput = Lazy::runForAll<10>(vecInput, [](auto x) { return intSqrt(x * 100) * 0.1; });
+
+        static_assert(std::is_same_v<decltype(vecOutput), std::vector<double>>,
+                     "2.1.2: Output vector type does not match!");
+
         std::cout << "2.1.2: Input vector length = " << vecInput.size() << ", output vector length = " << vecOutput.size() << "\n";
     }
     {
         // The input can also be an array. There will be as many parallel threads as
         // there are elements in the array. There will be no heap allocations.
-        std::array<int, 10> arrInput;
-        for (int i = 0; i < arrInput.size(); ++i)
-            arrInput[i] = 100 * i;
-        std::array arrOutput = Lazy::runForAll(arrInput, intSqrt);
+        auto arrOutput = Lazy::runForAll(arrInput, intSqrt);
+        static_assert(std::is_same_v<decltype(arrOutput), std::array<uint16_t, szArrayLength>>,
+                     "2.1.3: Output array type does not match!");
         std::cout << "2.1.3: Input array length = " << arrInput.size() << ", output array length = " << arrOutput.size() << "\n";
     }
     {
         // Initializer lists are also supported. The output is an std::vector.
         auto vecOutput = Lazy::runForAll({33,22,77,99,88}, [](auto x) { return x - 0.5; });
+        static_assert(std::is_same_v<decltype(vecOutput), std::vector<double>>,
+                     "2.1.4: Output vector type does not match!");
         std::cout << "2.1.4: input values are {33,22,77,99,88}, output vector is {" <<
                      vecOutput[0] << ", " << vecOutput[1] << ", " << vecOutput[2] << ", " << vecOutput[3] << ", " << vecOutput[4] <<"}\n";
 
         // If you want to avoid heap allocation, you can use initialized std:array
-        std::array arrOutput = Lazy::runForAll(std::array{33,22,77,99,88}, [](auto x) { return x - 0.5; });
+        auto arrOutput = Lazy::runForAll(std::array{33,22,77,99,88}, [](auto x) { return x - 0.5; });
+        static_assert(std::is_same_v<decltype(arrOutput), std::array<double, 5>>,
+                     "2.1.5: Output array type does not match!");
         std::cout << "2.1.5: input values are {33,22,77,99,88}, output array is  {" <<
                      arrOutput[0] << ", " << arrOutput[1] << ", " << arrOutput[2] << ", " << arrOutput[3] << ", " << arrOutput[4] <<"}\n";
     }
@@ -119,14 +131,30 @@ int main()
     //              vecOutput[i] = f3(f2(f1((vecInput[i])))
     std::cout << "\n*** Example 2.2 *** : Run a set of continuations for each value in the input vector.\n";
     {
-        // out = sqrt((10 * in) + 1.5)
+        // vector out = sqrt((10 * in) + 1.5).
         auto vecOutput = Lazy::runForAll(vecInput,
                                          [](auto x) { return 10 * x; },
                                          [](auto x) { return x + 1.5; },
                                          [](auto x) { return std::sqrt(x); });
 
+        static_assert(std::is_same_v<decltype(vecOutput), std::vector<double>>,
+                      "2.2: Output vector type does not match!");
+
         std::cout << "2.2: Input vector length = " << vecInput.size() << ", output vector length = " << vecOutput.size() << "\n";
-        std::cout << "    Last input value = " << vecInput.back() << ", last output value = " << vecOutput.back() << ".\n";
+        std::cout << "     Last input value = " << vecInput.back() << ", last output value = " << vecOutput.back() << ".\n";
+
+        // array out = sqrt((10 * in) + 1.5)
+        // Array input uses always as many threads as there are elements in the array.
+        auto arrOutput = Lazy::runForAll(arrInput,
+                                         [](auto x) { return 10 * x; },
+                                         [](auto x) { return x + 1.5; },
+                                         [](auto x) { return std::sqrt(x); });
+
+        static_assert(std::is_same_v<decltype(arrOutput), std::array<double, szArrayLength>>,
+                      "2.2: Output array type does not match!");
+
+        std::cout << "     Input array length = " << arrInput.size() << ", output vector length = " << arrOutput.size() << "\n";
+        std::cout << "     Last input value = " << arrInput.back() << ", last output value = " << arrOutput.back() << ".\n";
     }
 
     // Example 2.3: One or more functions in one or more threads throw. The exception can be caught normally.
@@ -134,15 +162,15 @@ int main()
     {
         try {
             auto vecOutput = Lazy::runForAll({2,1,0,-1,2},
-                                         [](auto x) { return 100 * x; },
-                                         [](auto x) { if (x < 0)
-                                                        throw std::runtime_error("[[Negative sqrt]]");
-                                                      return std::sqrt(x); });
+                                             [](auto x) { return 100 * x; },
+                                             [](auto x) { if (x < 0)
+                                                            throw std::runtime_error("[[Negative sqrt]]");
+                                                          return std::sqrt(x); });
         std::cout << "2.3: Output vector is  {" <<
                      vecOutput[0] << ", " << vecOutput[1] << ", " << vecOutput[2] << ", " << vecOutput[3] << ", " << vecOutput[4] <<"}\n";
         }
         catch (const std::exception& e) {
-            std::cout << "EXCEPTION: " << e.what() <<"\n";
+            std::cout << "EXCEPTION: " << e.what() << "\n";
         }
     }
 
@@ -158,21 +186,21 @@ int main()
       for (int i = 0; i < vec.size(); ++i)
         vec[vec.size() - i - 1] = 10 * i;
 
-      // Make an array of {from, to}-index pairs. Can be either an array or a vector.
-#if 1
-      const std::size_t N = 10; // Number of parallel threads
-      std::vector<std::pair<std::size_t, std::size_t>> aPairs(N);
-#else
-      constexpr std::size_t N = 10; // Number of parallel threads
-      std::array<std::pair<std::size_t, std::size_t>, N> aPairs;
-#endif
+      // Make an array of {from, to}-index pairs.
+      // Can be either an array or a vector. Both are used for demonstration.
+      constexpr std::size_t N = 10; // Number of parallel finder threads
+      std::vector<std::pair<std::size_t, std::size_t>> vecPairs(N);
+      std::array<std::pair<std::size_t, std::size_t>, N> arrPairs;
+
       double dFrom = 0, dTo = 0;
       for (auto i = 0; i < N; ++i) {
         dFrom = dTo;
         dTo += vec.size() / double(N);
-        aPairs[i] = {std::size_t(dFrom), std::min(std::size_t(dTo), vec.size())};
+        vecPairs[i] = {std::size_t(dFrom), std::min(std::size_t(dTo), vec.size())};
+        arrPairs[i] = {std::size_t(dFrom), std::min(std::size_t(dTo), vec.size())};
       }
-      aPairs[N-1].second = vec.size();
+      vecPairs[N-1].second = vec.size();
+      arrPairs[N-1].second = vec.size();
 
       int iFindMe = 5500;  // Find this value from vector vec.
       // Finder function which inputs a StopToken and an index pair (from, to)
@@ -185,20 +213,31 @@ int main()
       // Run the finder in parallel for all index pairs
       // A StopToken object is created automatically by the library
       // because finder takes one as the first argument.
-      auto vecIndex = Lazy::runForAll(aPairs, finder);
+      // The job is done twice using both an array and a vector for demonstration.
+      auto vecIndex = Lazy::runForAll(vecPairs, finder);
+      auto arrIndex = Lazy::runForAll(arrPairs, finder);
+
+      static_assert(std::is_same_v<decltype(arrIndex), std::array<std::size_t, N>>,
+                    "2.4: Output array type does not match!");
+      static_assert(std::is_same_v<decltype(vecIndex), std::vector<std::size_t>>,
+                    "2.4: Output vector type does not match!");
 
       std::cout << "2.4: Finder results for value "<<iFindMe<<" were:  (-1 == not found)\n";
-      for (auto i = 0; i < N; ++i)
-        std::cout << i << ": index range [" << aPairs[i].first << ","<< aPairs[i].second << "] : found at index = " << int(vecIndex[i]) << "\n";
+      for (auto i = 0; i < N; ++i) {
+        std::cout << i << ": index range [" << arrPairs[i].first << ","<< arrPairs[i].second << "] : found at index = " << int(vecIndex[i]);
+        if (int(vecIndex[i]) >= 0)
+          std::cout << ", value is " << vec[vecIndex[i]] << ", should be " << iFindMe << "\n";
+        else
+          std::cout << "\n";
+        if (arrPairs[i] != vecPairs[i])  // Should never go here
+          std::cout << "2.4: Array vs. vector mismatch at index " << i << " !!\n";
+      }
     }
 
     // Example 2.5: Call a void function by using a dummy return value. The return value can be ignored.
     std::cout << "\n*** Example 2.5 *** : A void function can be called by using dummy return type.\n";
     {
-        std::vector<int> vecIn;
-        for(int n = 1; n <= 5; ++n)
-            vecIn.push_back(n);
         // Use nullptr_t as the dummy return type
-        Lazy::runForAll(vecIn, [](auto n) { myVoidFunction(n); return nullptr;});
+        Lazy::runForAll({1,2,3,4}, [](auto n) { myVoidFunction(n); return nullptr;});
     }
 }

@@ -38,6 +38,9 @@ In this example, one of the three parallel functions may throw.
     }
 ```
 
+The output will be `i = 100, d = 3.16228, s = "10"`.
+
+
 There are more examples on how to use `Lazy::runParallel` in [example-1.cc](example-1.cc).
 For an example on how to use stop tokens to communicate between the functions, see example 1.2 in example-1.cc.
 
@@ -64,6 +67,14 @@ Here is an example on running a sequence of 3 continuations where the inputs are
     catch (const std::exception& e) {
         std::cout << "EXCEPTION: " << e.what() <<"\n";
     }
+```
+
+The output will be
+```
+0 --> 1.22474
+10 --> 10.0747
+20 --> 14.1951
+30 --> 17.3638
 ```
 
 Notice that if the input were an `std::array<int, 4>` instead of `std::vector<int>`,
@@ -121,7 +132,16 @@ std::size_t indexOf(const Vec& vec,
 }
 
 ```
-For other methods provided by `Lazy::StopToken`, see `class StopToken` in the beginning of `Lazy.h`.
+
+The output will be
+```
+Quarter #0 returns index -1 -> not found
+Quarter #1 returns index -1 -> not found
+Quarter #2 returns index 543 -> FOUND !
+Quarter #3 returns index -1 -> not found
+```
+
+For other methods provided by `Lazy::StopToken`, see `class StopToken` in the beginning of [Lazy.h](Lazy.h).
 
 For more examples on how to use `Lazy::runForAll`, see [example-2.cc](example-2.cc).
 
