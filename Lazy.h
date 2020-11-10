@@ -14,7 +14,6 @@
 #include <vector>
 #include <initializer_list>
 
-
 // A library for running functions in parallel
 // using future-like objects with continuation
 // and lazy evaluation.
@@ -63,6 +62,94 @@ public:
 private:
   std::atomic<int> _value{0};
 };
+
+// An std::vector<std::size_t> - like object which behaves as if it was filled with std::iota,
+// meaning that vec[i] = i for i = 0...size()-1.
+// Also iterators vec.begin() and vec.end() work so range-based for-loops work.
+class Sequence
+{
+public:
+  using value_type = std::size_t;
+  using size_type = std::size_t;
+
+  Sequence(std::size_t sz = 0) : N(sz)  {}
+
+  std::size_t operator[](std::size_t i) const noexcept
+  {
+      return i;
+  }
+
+  bool empty() const noexcept
+  {
+      return !bool(N);
+  }
+
+  size_type size() const noexcept
+  {
+      return N;
+  }
+
+  void resize(size_type newSize)
+  {
+      N = newSize;
+  }
+
+  class Iterator {
+  public:
+    typedef std::bidirectional_iterator_tag iterator_category;
+    typedef std::size_t                     value_type;
+    typedef std::ptrdiff_t                  difference_type;
+    typedef const std::size_t*              pointer;
+    typedef const std::size_t&              reference;
+
+    Iterator(std::size_t n, std::size_t mx) : _n(n), _maxN(mx) {}
+
+  reference operator*() const
+  {
+    return _n;
+  }
+
+  Iterator& operator++()
+  {
+    if (_n < _maxN)
+      ++_n;
+    return *this;
+  }
+
+  Iterator& operator--()
+  {
+    if (_n > 0)
+      --_n;
+    return *this;
+  }
+
+  bool operator== (const Iterator& it) const
+  {
+      return _n == it._n;
+  }
+
+  bool operator!= (const Iterator& it) const
+  {
+      return _n != it._n;
+  }
+
+  private:
+    std::size_t _n = 0;
+    std::size_t _maxN = 0;
+  }; // class Iterator
+
+  Iterator begin() const
+  {
+      return Iterator(0, N);
+  }
+
+  Iterator end() const
+  {
+      return Iterator(N, N);
+  }
+private:
+  std::size_t N;
+};  // class Sequence
 
 struct Empty
 {
@@ -523,8 +610,12 @@ auto runForAll(const Vec& vecX, Func&& func)
   if constexpr (bOneParam)
     {
       using T = decltype(func(std::declval<U>()));  // output type (must be default constructible)
+      constexpr bool bVoid = std::is_same_v<T, void>;  // The function return type is void?
+      using NonVoidT = std::conditional_t<bVoid, char, T>;  // Replace void with something else, like char.
 
-      std::vector<T> vecY(vecX.size()); // Result vector
+      std::vector<NonVoidT> vecY; // Result vector
+      if constexpr (!bVoid)
+        vecY.resize(vecX.size());  // Allocate only if needed (i.e non-const return type)
       std::exception_ptr pException;
       std::atomic_size_t szExceptionCount {0}; // Number of tasks that have tried to raise an exception.
       std::atomic_size_t szNumStartedTasks {0}; // Number of tasks that have either finished or running.
@@ -533,7 +624,10 @@ auto runForAll(const Vec& vecX, Func&& func)
           auto szIndex = szNumStartedTasks.fetch_add(1);
           if (szIndex < vecX.size()) { // There are vecX.size() tasks to run in total
             try {
-              vecY[szIndex] = func(vecX[szIndex]);
+              if constexpr (bVoid)
+                func(vecX[szIndex]);
+              else
+                vecY[szIndex] = func(vecX[szIndex]);
             }
             catch (...) {
               auto szExceptionsSoFar = szExceptionCount.fetch_add(1);
@@ -568,7 +662,10 @@ auto runForAll(const Vec& vecX, Func&& func)
       if (pException)
         std::rethrow_exception(pException);
 
-      return vecY;
+      if constexpr (bVoid)
+        return;
+      else
+        return vecY;
     } // func takes one parameter
   else if constexpr (bStopTokenAndParam)
     { // func takes a stop token and a parameter.
@@ -678,6 +775,14 @@ auto runForAll(std::initializer_list<U> lstX, Funcs&&... funcs)
 {
   auto nestedFuncs = [&funcs...](auto t) { return nested(t, funcs...); };
   return runForAll<MaxThreads>(std::vector<U>{lstX}, nestedFuncs);
+}
+
+// Overload of the above function for sequence (0,1,...N-1) input.
+template <int MaxThreads = 0, class... Funcs>
+auto runForAll(Sequence seq, Funcs&&... funcs)
+{
+  auto nestedFuncs = [&funcs...](auto t) { return nested(t, funcs...); };
+  return runForAll<MaxThreads>(seq, nestedFuncs);
 }
 
 } // namespace Lazy

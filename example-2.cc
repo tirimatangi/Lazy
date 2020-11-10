@@ -6,6 +6,7 @@
 #include <numeric>
 #include <string>
 #include <utility>
+#include <cassert>
 
 #include "Lazy.h"
 
@@ -234,10 +235,45 @@ int main()
       }
     }
 
-    // Example 2.5: Call a void function by using a dummy return value. The return value can be ignored.
-    std::cout << "\n*** Example 2.5 *** : A void function can be called by using dummy return type.\n";
+    // Example 2.5: If the function return type is void, runForAll returns void.
+    std::cout << "\n*** Example 2.5 *** : Functions with void return type can also be used. \n";
     {
         // Use nullptr_t as the dummy return type
-        Lazy::runForAll({1,2,3,4}, [](auto n) { myVoidFunction(n); return nullptr;});
+        Lazy::runForAll({1,2,3,4}, [](auto n) { myVoidFunction(n); });
+    }
+
+    // Example 2.6: Input and output vectors may be preallocated and indexed by
+    //              using Lazy::Sequence{N} as input vector.
+    //              It looks as if it was std::vector<size_t> X = {0,1,..N-1} even though it has no data.
+    std::cout << "\n*** Example 2.6 *** : Input and output vectors are preallocated and the function may return void.\n";
+    {
+        const std::size_t N = 5;
+        std::vector<double> vecIn(N);          // Input vector
+        std::vector<double> vecFractionOut(N); // 1st output vector
+        std::vector<int> vecExponentOut(N);    // 2nd output vector
+
+        // Prepare test input
+        for (auto i : Lazy::Sequence{N})
+          vecIn[i] = 0.1 * (i + 1) * std::pow(2.0, i);
+
+        // Use Sequence{N} = {0,1,...N-1} as input to a lambda which returns void.
+        Lazy::runForAll(Lazy::Sequence{N}, [&](std::size_t i)
+          {
+            vecFractionOut[i] = std::frexp(vecIn[i], &vecExponentOut[i]);
+          });
+
+        // Alternatively, one output can be returned as a vector and the other
+        // as output parameter. The outcome is the same as above.
+        auto vecFrac2 =  Lazy::runForAll(Lazy::Sequence{N}, [&](std::size_t i)
+          {
+            return std::frexp(vecIn[i], &vecExponentOut[i]);
+          });
+
+        // Sequence can also be used in range-based for-loops.
+        for (auto i : Lazy::Sequence{N}) {
+          std::cout << "Input # " << i << ": " << vecIn[i]
+                    << " = "  << vecFractionOut[i] << " * 2^" << vecExponentOut[i] << "\n";
+          assert(vecFrac2[i] == vecFractionOut[i]);
+        }
     }
 }

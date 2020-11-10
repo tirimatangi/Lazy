@@ -81,7 +81,41 @@ Notice that if the input were an `std::array<int, 4>` instead of `std::vector<in
 the output would be an `std::array<double, 4>` instead of `std::vector<double>`.
 There are no heap allocations if the input is an `std::array`.
 
-If the return type of your function is `void`, you can use a dummy type (e.g. `nullptr`) and ignore the output vector. See example 2.5 in [example-2.cc](example-2.cc).
+If the return type of your function is `void`, the return type of `Lazy::runForAll` is also void.
+For example, the input and output vectors may be preallocated and indexed with a vector-like range container `Lazy::Sequence`. It behaves as if it was `std::vector<size_t> v = {0...N-1}` but does not consume memory at all.
+
+Here is an example which uses one preallocated input vector to calculate two preallocated output vectors.
+```c++
+    {
+        const std::size_t N = 4;
+        std::vector<double> vecIn = {0.1, 0.2, 1.2, 2.4};  // Input vector
+        std::vector<double> vecFractionOut(N); // 1st output vector
+        std::vector<int> vecExponentOut(N);    // 2nd output vector
+
+        // Use Sequence{N} to index the vectors.
+        Lazy::runForAll(Lazy::Sequence{N}, [&](std::size_t i)
+          {
+            vecFractionOut[i] = std::frexp(vecIn[i], &vecExponentOut[i]);
+          });
+
+        // Print the results
+        for (auto i : Lazy::Sequence{N}) {
+          std::cout << "Input # " << i << ": " << vecIn[i]
+                    << " = "  << vecFractionOut[i] << " * 2^" << vecExponentOut[i] << "\n";
+        }
+    }
+```
+
+The output will be
+```
+Input # 0: 0.1 = 0.8 * 2^-3
+Input # 1: 0.2 = 0.8 * 2^-2
+Input # 2: 1.2 = 0.6 * 2^1
+Input # 3: 2.4 = 0.6 * 2^2
+```
+
+For more information on `Lazy::Sequence` and functions with preallocated output vectors,
+see examples 2.5 and 2.6 in [example-2.cc](example-2.cc).
 
 Here is an example on how a function which gets ready first can abort the others by using `Lazy::StopToken`.
 The task is to find a number from a vector using 4 parallel threads.
@@ -143,8 +177,7 @@ Quarter #3 returns index -1 -> not found
 
 For other methods provided by `Lazy::StopToken`, see `class StopToken` in the beginning of [Lazy.h](Lazy.h).
 
-For more examples on how to use `Lazy::runForAll`, see [example-2.cc](example-2.cc).
-
+For many more examples on how to use `Lazy::runForAll`, see [example-2.cc](example-2.cc).
 
 
 #### 3. Use futures and continuations in manual mode
