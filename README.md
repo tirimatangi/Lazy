@@ -17,7 +17,7 @@ You can also use rudimentary stop tokens for letting a parallel task tell the ot
 
 ## Three basic ways to use the library
 
-The examples have been tested with gcc 9.3.0 and compiled with `g++ example.cc -pthread --std=c++17`.
+The examples have been tested with gcc versions 9.3.0 and 10.2.0 and compiled with `g++ example.cc -pthread --std=c++17`.
 
 #### 1. Run any number of functions in parallel and get the results as a tuple
 
@@ -42,7 +42,7 @@ The output will be `i = 100, d = 3.16228, s = "10"`.
 
 
 There are more examples on how to use `Lazy::runParallel` in [example-1.cc](example-1.cc).
-For an example on how to use stop tokens to communicate between the functions, see example 1.2 in example-1.cc.
+For an example on how to use stop tokens to communicate between the functions, see example 1.2 in [example-1.cc](example-1.cc).
 
 #### 2. Vector in, vector out
 
