@@ -26,6 +26,9 @@ target_include_directories(Lazy
 
 target_compile_features(Lazy INTERFACE cxx_std_17)
 
+find_package(Threads REQUIRED)
+target_link_libraries(Lazy INTERFACE Threads::Threads)
+
 # ---- Install ----
 
 include(CMakePackageConfigHelpers)
@@ -50,10 +53,11 @@ write_basic_package_version_file(
 set(Lazy_install_cmakedir
         "${CMAKE_INSTALL_LIBDIR}/cmake/${Lazy_directory}")
 
-install(FILES "${PROJECT_BINARY_DIR}/LazyConfigVersion.cmake"
+install(FILES
+        "${PROJECT_SOURCE_DIR}/cmake/LazyConfig.cmake"
+        "${PROJECT_BINARY_DIR}/LazyConfigVersion.cmake"
         DESTINATION "${Lazy_install_cmakedir}")
 
 install(EXPORT LazyTargets
-        FILE LazyConfig.cmake
         NAMESPACE Lazy::
         DESTINATION "${Lazy_install_cmakedir}")
