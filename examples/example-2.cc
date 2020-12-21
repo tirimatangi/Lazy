@@ -8,9 +8,7 @@
 #include <utility>
 #include <cassert>
 
-#include "Lazy.h"
-
-// Compilation: g++ example-2.cc -pthread --std=c++17
+#include <Lazy/Lazy.h>
 
 template <class... Args>
 void atomic_print(Args&&... args)
