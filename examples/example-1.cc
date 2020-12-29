@@ -6,9 +6,7 @@
 #include <numeric>
 #include <string>
 
-#include "Lazy.h"
-
-// Compilation: g++ example-1.cc -pthread --std=c++17
+#include <Lazy/Lazy.h>
 
 template <class... Args>
 void atomic_print(Args&&... args)
