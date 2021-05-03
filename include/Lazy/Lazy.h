@@ -69,12 +69,12 @@ private:
 class Sequence
 {
 public:
-  using value_type = std::size_t;
+  using value_type = const std::size_t;
   using size_type = std::size_t;
 
   Sequence(std::size_t sz = 0) : N(sz)  {}
 
-  std::size_t operator[](std::size_t i) const noexcept
+  value_type operator[](std::size_t i) const noexcept
   {
       return i;
   }
@@ -97,10 +97,10 @@ public:
   class Iterator {
   public:
     typedef std::bidirectional_iterator_tag iterator_category;
-    typedef std::size_t                     value_type;
-    typedef std::ptrdiff_t                  difference_type;
-    typedef const std::size_t*              pointer;
-    typedef const std::size_t&              reference;
+    typedef const std::size_t        value_type;
+    typedef std::ptrdiff_t           difference_type;
+    typedef value_type*              pointer;
+    typedef value_type&              reference;
 
     Iterator() : _n(0), _maxN(0) {}
     Iterator(std::size_t n, std::size_t mx) : _n(n), _maxN(mx) {}
@@ -137,7 +137,7 @@ public:
     --*this;
     return temp;
   }
-    
+
   bool operator== (const Iterator& it) const
   {
       return _n == it._n;
@@ -162,6 +162,7 @@ public:
   {
       return Iterator(N, N);
   }
+
 private:
   std::size_t N;
 };  // class Sequence
