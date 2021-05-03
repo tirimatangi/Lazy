@@ -102,6 +102,7 @@ public:
     typedef const std::size_t*              pointer;
     typedef const std::size_t&              reference;
 
+    Iterator() : _n(0), _maxN(0) {}
     Iterator(std::size_t n, std::size_t mx) : _n(n), _maxN(mx) {}
 
   reference operator*() const
@@ -116,6 +117,13 @@ public:
     return *this;
   }
 
+  Iterator operator++(int)
+  {
+    Iterator temp = *this;
+    ++*this;
+    return temp;
+  }
+
   Iterator& operator--()
   {
     if (_n > 0)
@@ -123,6 +131,13 @@ public:
     return *this;
   }
 
+  Iterator operator--(int)
+  {
+    Iterator temp = *this;
+    --*this;
+    return temp;
+  }
+    
   bool operator== (const Iterator& it) const
   {
       return _n == it._n;
@@ -153,7 +168,7 @@ private:
 
 struct Empty
 {
-  void operator()() noexcept {}
+  void operator()() const noexcept {}
 };
 
 // A promise-like object which is always allocated from the stack.
