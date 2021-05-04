@@ -41,8 +41,8 @@ In this example, one of the three parallel functions may throw.
 The output will be `i = 100, d = 3.16228, s = "10"`.
 
 
-There are more examples on how to use `Lazy::runParallel` in [example-1.cc](example-1.cc).
-For an example on how to use stop tokens to communicate between the functions, see example 1.2 in [example-1.cc](example-1.cc).
+There are more examples on how to use `Lazy::runParallel` in [example-1.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-1.cc).
+For an example on how to use stop tokens to communicate between the functions, see example 1.2 in [example-1.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-1.cc).
 
 #### 2. Vector in, vector out
 
@@ -115,7 +115,7 @@ Input # 3: 2.4 = 0.6 * 2^2
 ```
 
 For more information on `Lazy::Sequence` and functions with preallocated output vectors,
-see examples 2.5 and 2.6 in [example-2.cc](example-2.cc).
+see examples 2.5 and 2.6 in [example-2.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-2.cc).
 
 Here is an example on how a function which gets ready first can abort the others by using `Lazy::StopToken`.
 The task is to find a number from a vector using 4 parallel threads.
@@ -175,9 +175,9 @@ Quarter #2 returns index 543 -> FOUND !
 Quarter #3 returns index -1 -> not found
 ```
 
-For other methods provided by `Lazy::StopToken`, see `class StopToken` in the beginning of [Lazy.h](Lazy.h).
+For other methods provided by `Lazy::StopToken`, see `class StopToken` in the beginning of [Lazy.h](https://github.com/tirimatangi/Lazy/blob/main/include/Lazy/Lazy.h).
 
-For many more examples on how to use `Lazy::runForAll`, see [example-2.cc](example-2.cc).
+For many more examples on how to use `Lazy::runForAll`, see [example-2.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-2.cc).
 
 
 #### 3. Use futures and continuations in manual mode
@@ -254,5 +254,5 @@ Calling g.run...
 Future f returned 8.88819
 Future g returned { 2 4 8 16 32 64 128 256 512 1024 }
 ```
-For more examples on how to use `Lazy::future` manually, see [example-3.cc](example-3.cc).
+For more examples on how to use `Lazy::future` manually, see [example-3.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-3.cc).
 
