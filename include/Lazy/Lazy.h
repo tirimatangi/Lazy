@@ -769,35 +769,35 @@ auto nested(T t, F&& f, Fs&&... fs)
                                             for (int i = 0; i < numDecimals; ++i, r *= 10);
                                             return int(r * z);});
 */
-template <int MaxThreads = 0, class U, class... Funcs>
-auto runForAll(const std::vector<U>& x, Funcs&&... funcs)
+template <int MaxThreads = 0, class U, class F1, class F2, class... Funcs>
+auto runForAll(const std::vector<U>& x, F1&& f1, F2&& f2, Funcs&&... funcs)
 {
-  auto nestedFuncs = [&funcs...](auto t) { return nested(t, funcs...); };
+  auto nestedFuncs = [&f1, &f2, &funcs...](auto t) { return nested(t, f1, f2, funcs...); };
   return runForAll<MaxThreads>(x, nestedFuncs);
 }
 
 // Note: MaxThreads template parameter is ignored.
 // There are always as many threads as there are elements in the array.
-template <int MaxThreads = 0, class U, std::size_t N, class... Funcs>
-auto runForAll(const std::array<U, N>& arrX, Funcs&&... funcs)
+template <int MaxThreads = 0, class U, std::size_t N, class F1, class F2, class... Funcs>
+auto runForAll(const std::array<U, N>& arrX, F1&& f1, F2&& f2, Funcs&&... funcs)
 {
-  auto nestedFuncs = [&funcs...](auto t) { return nested(t, funcs...); };
+  auto nestedFuncs = [&f1, &f2, &funcs...](auto t) { return nested(t, f1, f2, funcs...); };
   return runForAll(arrX, nestedFuncs);
 }
 
 // Overload of the above function for initializer list input.
-template <int MaxThreads = 0, class U, class... Funcs>
-auto runForAll(std::initializer_list<U> lstX, Funcs&&... funcs)
+template <int MaxThreads = 0, class U, class F1, class F2, class... Funcs>
+auto runForAll(std::initializer_list<U> lstX, F1&& f1, F2&& f2, Funcs&&... funcs)
 {
-  auto nestedFuncs = [&funcs...](auto t) { return nested(t, funcs...); };
-  return runForAll<MaxThreads>(std::vector<U>{lstX}, nestedFuncs);
+  auto nestedFuncs = [&f1, &f2, &funcs...](auto t) { return nested(t, f1, f2, funcs...); };
+  return runForAll<MaxThreads>(lstX, nestedFuncs);
 }
 
-// Overload of the above function for sequence (0,1,...N-1) input.
-template <int MaxThreads = 0, class... Funcs>
-auto runForAll(Sequence seq, Funcs&&... funcs)
+// Overload of the above function for Sequence (0,1,...N-1) and multiple nested functions.
+template <int MaxThreads = 0, class F1, class F2, class... Funcs>
+auto runForAll(Sequence seq, F1&& f1, F2&& f2, Funcs&&... funcs)
 {
-  auto nestedFuncs = [&funcs...](auto t) { return nested(t, funcs...); };
+  auto nestedFuncs = [&f1, &f2, &funcs...](auto t) { return nested(t, f1, f2, funcs...); };
   return runForAll<MaxThreads>(seq, nestedFuncs);
 }
 
