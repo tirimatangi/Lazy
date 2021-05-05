@@ -17,7 +17,8 @@ You can also use rudimentary stop tokens for letting a parallel task tell the ot
 
 ## Three basic ways to use the library
 
-The examples have been tested with gcc versions 9.3.0 and 10.2.0 and compiled with `g++ example.cc -pthread --std=c++17`.
+The examples have been tested with gcc 10.2.0 and clang 11.0.0.
+The compiler can be switched from gcc to clang by building the examples with `cmake examples -DCMAKE_CXX_COMPILER=clang++`.
 
 #### 1. Run any number of functions in parallel and get the results as a tuple
 

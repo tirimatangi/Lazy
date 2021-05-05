@@ -112,14 +112,20 @@ int main()
     {
         // Initializer lists are also supported. The output is an std::vector.
         auto vecOutput = Lazy::runForAll({33,22,77,99,88}, [](auto x) { return x - 0.5; });
+        auto vecOutput2 = Lazy::runForAll({33,22,77,99,88}, [](auto x) { return x - 0.5; }, [](auto x) { return 2*(x + 0.5); });
         static_assert(std::is_same_v<decltype(vecOutput), std::vector<double>>,
+                     "2.1.4: Output vector type does not match!");
+        static_assert(std::is_same_v<decltype(vecOutput2), std::vector<double>>,
                      "2.1.4: Output vector type does not match!");
         std::cout << "2.1.4: input values are {33,22,77,99,88}, output vector is {" <<
                      vecOutput[0] << ", " << vecOutput[1] << ", " << vecOutput[2] << ", " << vecOutput[3] << ", " << vecOutput[4] <<"}\n";
 
         // If you want to avoid heap allocation, you can use initialized std:array
         auto arrOutput = Lazy::runForAll(std::array{33,22,77,99,88}, [](auto x) { return x - 0.5; });
+        auto arrOutput2 = Lazy::runForAll(std::array{33,22,77,99,88}, [](auto x) { return x - 0.5; }, [](auto x) { return 2*(x + 0.5); });
         static_assert(std::is_same_v<decltype(arrOutput), std::array<double, 5>>,
+                     "2.1.5: Output array type does not match!");
+        static_assert(std::is_same_v<decltype(arrOutput2), std::array<double, 5>>,
                      "2.1.5: Output array type does not match!");
         std::cout << "2.1.5: input values are {33,22,77,99,88}, output array is  {" <<
                      arrOutput[0] << ", " << arrOutput[1] << ", " << arrOutput[2] << ", " << arrOutput[3] << ", " << arrOutput[4] <<"}\n";
