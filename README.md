@@ -17,8 +17,6 @@ You can also use rudimentary stop tokens for letting a parallel task tell the ot
 
 ## Three basic ways to use the library
 
-The examples have been tested with gcc 10.2.0 and clang 11.0.0.
-The compiler can be switched from gcc to clang by building the examples with `cmake examples -DCMAKE_CXX_COMPILER=clang++`.
 
 #### 1. Run any number of functions in parallel and get the results as a tuple
 
@@ -257,3 +255,12 @@ Future g returned { 2 4 8 16 32 64 128 256 512 1024 }
 ```
 For more examples on how to use `Lazy::future` manually, see [example-3.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-3.cc).
 
+## Compilation
+
+The easiest way to compile all examples is to do
+`cmake -DCMAKE_BUILD_TYPE=Release examples` followed by `make`.
+If you don't want to use cmake, the examples can be compiled manually one by one. For instance, <br>
+`g++ examples/example-1.cc -std=c++17 -I include/ -O3 -pthread -o example-1`
+
+The examples have been tested with g++ 10.3.0  and clang++ 12.0.0 but any compiler which complies with c++17 standard should do.
+The compiler can be switched from gcc to clang by building the examples with `cmake examples -DCMAKE_CXX_COMPILER=clang++`.
