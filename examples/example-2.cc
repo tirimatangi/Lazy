@@ -10,6 +10,8 @@
 
 #include <Lazy/Lazy.h>
 
+using namespace std::chrono_literals;
+
 template <class... Args>
 void atomic_print(Args&&... args)
 {
@@ -280,4 +282,162 @@ int main()
           assert(vecFrac2[i] == vecFractionOut[i]);
         }
     }
+
+     // Example 2-7: Threadpool example: Use a function whose return type is a vector so
+    //               the output is a vector of vectors.
+    std::cout << "\n*** Example 2-7 ***  (Threadpool) Parallel calls to a function which\n";
+    std::cout <<   "                     inputs a number and returns a vector for each call.\n";
+    std::cout <<   "                     The vector contains factors of the input\n";
+    std::cout <<   "                     (i.e. numbers which divide the input).\n";
+    {
+        using std::vector;
+        // First a helper for printing out input vectors and output vectors of vectors.
+        auto printFactors = [](const auto& in, const auto& out)
+        {
+            for (int i = 0; i < in.size(); ++i) {
+                std::cout << in[i] << " : { ";
+                for (int j = 0; j < out[i].size(); ++j)
+                    std::cout << out[i][j] << ' ';
+                std::cout << "}\n";
+            }
+        };
+
+        // findFactors returns a list of factors of x.
+        // E.g. factors(60) = { 2 3 4 5 6 10 12 15 20 30 }
+        auto findFactors = [](int x) -> vector<int> {
+            vector<int> vecSmall, vecLarge;
+            x = (x >= 0) ? x : -x;
+            int y = 2, yy = y*y;
+            while (yy < x) {
+                if (x % y == 0) {
+                    vecSmall.push_back(y);
+                    vecLarge.push_back(x / y);
+                }
+                yy += (2*y + 1); // (y+1)^2 = y*y + 2*y + 1
+                ++y;
+            }
+            if (yy == x)
+                vecSmall.push_back(y);
+            for (int i = vecLarge.size()-1; i >= 0; --i)
+                vecSmall.push_back(vecLarge[i]);
+            return vecSmall;
+        };
+
+        // Start a threadpool for finding factors
+        auto thrPool = Lazy::ThreadPool(findFactors);
+
+        std::cout << "Doing even hundreds...\n";
+        vector vecEvenHundreds {200, 400, 600, 800, 813};  // Vector of inputs
+        vector<vector<int>> vecFactorsEven;                    // Vector of output vectors.
+        vecFactorsEven.resize(vecEvenHundreds.size());
+        thrPool.run(vecEvenHundreds.data(), vecFactorsEven.data(), vecEvenHundreds.size());
+        printFactors(vecEvenHundreds, vecFactorsEven);
+
+        std::cout << "Doing odd hundreds...\n";
+        vector vecOddHundreds {100, 300, 500, 700, 900, 911};  // Vector of inputs
+        vector<vector<int>> vecFactorsOdd;                     // Vector of output vectors.
+        vecFactorsOdd.resize(vecOddHundreds.size());
+        thrPool.run(vecOddHundreds.data(), vecFactorsOdd.data(), vecOddHundreds.size());
+        printFactors(vecOddHundreds, vecFactorsOdd);
+    }
+
+    // Example 2-8: (Threadpool) Use a function whose return type is void so there is no output vector.
+    //                 Also demonstrate stop tokens to cancel other jobs when one has failed.
+    //                 Also demonstrate dealing with exceptions arising from a job.
+    std::cout << "\n*** Example 2-8 *** (Threadpool) Demonstrate a void function with stop tokens and exceptions.\n";
+    {
+        const int badNumber = 43;
+        auto func = [badNumber](Lazy::StopToken* token, int i) {
+            if (*token) {
+                atomic_print("Token is set so bailing out, i = ", i);
+                return;
+            }
+
+            if (i == badNumber) {
+                atomic_print("Bad number! Setting token and throwing. i = ", i, ", thread id = ", std::this_thread::get_id());
+                token->setValue(1); // Set token to let others know to give up
+                throw std::runtime_error("[[Bad Number]]");
+            }
+
+            atomic_print("All is good. Doing some work for 100ms. i = ", i);
+            std::this_thread::sleep_for(100ms);
+        };
+
+        // Start the thread pool and put the threads to idle.
+        auto thrPool = Lazy::ThreadPool(func);
+
+        try {
+            // Allocate input vectors
+            std::vector<int> vecIn {0,1,2,3, badNumber, 5,6,7,8,9};
+
+            // Run the function with input. There is no output data because the return type is void.
+            thrPool.run(vecIn.data(), nullptr, vecIn.size());
+        }
+        catch (const std::exception& e) {
+            std::cout << "Exception '" << e.what() << "' caught successfully.\n";
+        }
+    }
+
+        // Example 2-9: Start a thread pool and put the threads in idle to wait for work.
+        //              Compare performance with a varying number of parallel threads.
+        //              Also compare the performance of the thread pool to
+        //              runForAll() which uses disposable threads (i.e. the thread dies
+        //              when the function returns.)
+    std::cout << "\n*** Example 2-9 *** (Threadpool) Compare threadpool to using disposable threads.\n";
+    std::cout << "                       (This may take a while.)\n";
+    {
+        auto func = [](int i) -> double {  // The threads will run this function which maps an integer to a double.
+                        double d = 0;
+                        constexpr int iRounds = 8 * 1024;
+                        for (int jj = 0; jj < iRounds; ++jj)
+                            d += std::sin(i * (-jj % 1000) * (0.001 * 2 * 3.141592654));
+                        return d;
+                    };
+
+        int iCores =  2 * std::thread::hardware_concurrency();
+        while (iCores > std::thread::hardware_concurrency() / 8) {
+            std::cout << "Using " << iCores << " cores... ";
+            std::cout.flush();
+
+            // Start the thread pool and put the threads to idle.
+            auto thrPool = Lazy::ThreadPool(func, iCores);
+
+            // Allocate input and output vectors
+            std::vector<int> vecIn {-1,1,-2,2,-3,3,-4,4,-5,5,-6,6,-7,7,-8,8};
+            std::vector<double> vecOut(vecIn.size());
+            std::vector<double> vecRef(vecIn.size()); // The correct answer
+            for (size_t i = 0; i < vecIn.size(); ++i)
+                vecRef[i] = func(vecIn[i]);
+
+            auto start = std::chrono::system_clock::now();
+            // Reuse the threadpool 1024 times
+            for (int jj = 0; jj < 1024 * 8; ++jj) {
+                thrPool.run(vecIn.data(), vecOut.data(), vecOut.size());
+                for (size_t i = 0; i < vecIn.size(); ++i)  // Verify the result
+                    if (vecOut[i] != vecRef[i])
+                        std::cerr << "ERROR at index " << i << std::endl;
+            } // for jj
+            auto end = std::chrono::system_clock::now();
+            std::chrono::duration<double> diff = end-start;
+            std::cout << "ThreadPool: Time = " << diff.count() << std::endl;
+
+            if (iCores == std::thread::hardware_concurrency()) { // Single shot tester
+                std::cout << "Compare to " << iCores << " disposable threads... ";
+                std::cout.flush();
+                auto start = std::chrono::system_clock::now();
+                // Reuse the threadpool 1024 times
+                for (int jj = 0; jj < 1024 * 8; ++jj) {
+                    vecOut = Lazy::runForAll(vecIn, func);
+                    for (size_t i = 0; i < vecIn.size(); ++i)  // Verify the result
+                        if (vecOut[i] != vecRef[i])
+                            std::cerr << "ERROR at index " << i << std::endl;
+                } // for jj
+                auto end = std::chrono::system_clock::now();
+                std::chrono::duration<double> diff = end-start;
+                std::cout << " Time = " << diff.count() << std::endl;
+            }
+            iCores /= 2;
+        }
+    }
+
 }

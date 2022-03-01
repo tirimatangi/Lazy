@@ -18,7 +18,7 @@ You can also use rudimentary stop tokens for letting a parallel task tell the ot
 ## Three basic ways to use the library
 
 
-#### 1. Run any number of functions in parallel and get the results as a tuple
+### 1. Run any number of functions in parallel and get the results as a tuple
 
 In this example, one of the three parallel functions may throw.
 
@@ -43,11 +43,16 @@ The output will be `i = 100, d = 3.16228, s = "10"`.
 There are more examples on how to use `Lazy::runParallel` in [example-1.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-1.cc).
 For an example on how to use stop tokens to communicate between the functions, see example 1.2 in [example-1.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-1.cc).
 
-#### 2. Vector in, vector out
+### 2. Vector in, vector out using either disposable threads or a threadpool
+
+#### 2.1. Disposable threads
 
 You can run a function or a set of continuations in parallel for each element of the input vector and get the results as a vector.
-By default, the maximum number of parallel threads in the thread pool is the number of cores in your machine.
-You can set the thread pool size manually with template argument, for example `auto vecOutput = Lazy::runForAll<128>(vecInput, ...);`
+By default, the maximum number of parallel threads is the number of cores in your machine.
+You can set the number of threads manually with template argument, for example `auto vecOutput = Lazy::runForAll<128>(vecInput, ...);`
+The threads will be disposable in the sense that the threads will die when the function returns.
+Examples 2.1 to 2.6 in [example-2.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-2.cc) show how to use
+disposable threads with function `Lazy::runForAll`.
 
 Here is an example on running a sequence of 3 continuations where the inputs are in std::vector<int> and the output is an std::vector<double>.
 
@@ -178,8 +183,65 @@ For other methods provided by `Lazy::StopToken`, see `class StopToken` in the be
 
 For many more examples on how to use `Lazy::runForAll`, see [example-2.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-2.cc).
 
+#### 2.2. Threadpool
 
-#### 3. Use futures and continuations in manual mode
+If you repeatedly call the same function with different input and output vectors, it may be faster to
+launch a permanent threadpool instead of using disposable threads as described above in section 2.1.
+However, disposable threads are lock-free whereas the threadpool must use a mutex and condition
+variables to manage the states of the threads. Hence, you should measure which method gives
+a better performance in your use case.
+Example 2-9 in [example-2.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-2.cc)
+is an example of such a measurement.
+
+Example 2-7 gives an example of a use case where the return type of the function is a vector
+so a call to the threadpool maps a vector of integers into a vector of vectors of integers.
+
+Example 2-8 demonstrates how to run a void function in the threadpool and how to deal with
+exceptions and stop tokes for cancelling the run prematurely.
+
+Here is a brief example on how to use the threadpool. In this case,
+the same input vector is used for each `multiplier` value.
+
+```c++
+    {
+        int multiplier = 1;
+        auto func = [&multiplier](double x) {
+            return multiplier * std::exp(x);
+        };
+
+        std::vector<double> vecIn(256), vecOut(256);
+        // Fill in the input vector
+        for (int i = 0; i < 256; ++i)
+            vecIn[i] = std::cos((3.141592654 / 256) * i);
+
+        // Start the threadpool
+        auto thrPool = Lazy::ThreadPool(func);
+
+        // Fill in the output vector several times using different parameters
+        while (multiplier <= 1000000) {
+            // Set vecOut[i] = func(vecIn[i]) for each i in parallel.
+            thrPool.run(vecIn.data(), vecOut.data(), vecIn.size());
+            // Do something with vecOut...
+            std::cout << "multiplier = " << multiplier
+                      << ", vecOut[first] = " << vecOut[0]
+                      << ", vecOut[last] = " << vecOut[255] << "\n";
+            multiplier *= 10;
+        }
+    }
+```
+
+The output will be
+```
+multiplier = 1, vecOut[first] = 2.71828, vecOut[last] = 0.367907
+multiplier = 10, vecOut[first] = 27.1828, vecOut[last] = 3.67907
+multiplier = 100, vecOut[first] = 271.828, vecOut[last] = 36.7907
+multiplier = 1000, vecOut[first] = 2718.28, vecOut[last] = 367.907
+multiplier = 10000, vecOut[first] = 27182.8, vecOut[last] = 3679.07
+multiplier = 100000, vecOut[first] = 271828, vecOut[last] = 36790.7
+multiplier = 1000000, vecOut[first] = 2.71828e+06, vecOut[last] = 367907
+```
+
+### 3. Use futures and continuations in manual mode
 
 You can define the futures and the continuations they will run manually.
 The first function in the chain of continuations can have any number of input parameters which are passed to function `Lazy::future<ReturnType>(...)`.
@@ -262,5 +324,5 @@ The easiest way to compile all examples is to do
 If you don't want to use cmake, the examples can be compiled manually one by one. For instance, <br>
 `g++ examples/example-1.cc -std=c++17 -I include/ -O3 -pthread -o example-1`
 
-The examples have been tested with g++ 10.3.0  and clang++ 12.0.0 but any compiler which complies with c++17 standard should do.
+The examples have been tested with g++ 11.2.0  and clang++ 13.0.0 but any compiler which complies with c++17 standard should do.
 The compiler can be switched from gcc to clang by building the examples with `cmake examples -DCMAKE_CXX_COMPILER=clang++`.
