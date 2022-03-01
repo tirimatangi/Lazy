@@ -13,6 +13,7 @@
 #include <variant>
 #include <vector>
 #include <initializer_list>
+#include <functional>
 
 // A library for running functions in parallel
 // using future-like objects with continuation
@@ -23,6 +24,16 @@
 
 namespace Lazy
 {
+
+template <class... Args>
+void atomic_print(Args&&... args)
+{
+    std::stringstream ss;
+    (ss << ... << args) << '\n';
+    std::cout << ss.str();
+}
+
+using std::size_t;
 
 // An std::stop_token - like class.
 // All it does is to wrap an atomic integer.
@@ -63,18 +74,18 @@ private:
   std::atomic<int> _value{0};
 };
 
-// An std::vector<std::size_t> - like object which behaves as if it was filled with std::iota,
+// An std::vector<size_t> - like object which behaves as if it was filled with std::iota,
 // meaning that vec[i] = i for i = 0...size()-1.
 // Also iterators vec.begin() and vec.end() work so range-based for-loops work.
 class Sequence
 {
 public:
-  using value_type = const std::size_t;
-  using size_type = std::size_t;
+  using value_type = const size_t;
+  using size_type = size_t;
 
-  Sequence(std::size_t sz = 0) : N(sz)  {}
+  Sequence(size_t sz = 0) : N(sz)  {}
 
-  value_type operator[](std::size_t i) const noexcept
+  value_type operator[](size_t i) const noexcept
   {
       return i;
   }
@@ -97,13 +108,13 @@ public:
   class Iterator {
   public:
     typedef std::bidirectional_iterator_tag iterator_category;
-    typedef const std::size_t        value_type;
+    typedef const size_t        value_type;
     typedef std::ptrdiff_t           difference_type;
     typedef value_type*              pointer;
     typedef value_type&              reference;
 
     Iterator() : _n(0), _maxN(0) {}
-    Iterator(std::size_t n, std::size_t mx) : _n(n), _maxN(mx) {}
+    Iterator(size_t n, size_t mx) : _n(n), _maxN(mx) {}
 
   reference operator*() const
   {
@@ -149,8 +160,8 @@ public:
   }
 
   private:
-    std::size_t _n = 0;
-    std::size_t _maxN = 0;
+    size_t _n = 0;
+    size_t _maxN = 0;
   }; // class Iterator
 
   Iterator begin() const
@@ -164,13 +175,208 @@ public:
   }
 
 private:
-  std::size_t N;
+  size_t N;
 };  // class Sequence
 
 struct Empty
 {
   void operator()() const noexcept {}
 };
+
+// Solves the return type, argument types and noexcept status of callable F.
+template <class F>
+struct TypeSolver
+{
+    template< class R, class... Args >
+    static R resultOfFunction(std::function<R(Args...)>);
+
+    template< class R, class... Args >
+    static std::tuple<Args...> argumentsAsTupleOf(std::function<R(Args...)>);
+
+    template< class R, class... Args >
+    static std::is_nothrow_invocable<F, Args...> isNoExcept(std::function<R(Args...)>);
+
+    constexpr TypeSolver(F) {}; // Dummy constructor for class template argument deduction.
+    using ResultType = decltype(resultOfFunction(std::function{std::declval<F>()}));
+    using ArgumentTypes = decltype(argumentsAsTupleOf(std::function{std::declval<F>()}));
+    using NoExceptType = decltype(isNoExcept(std::function{std::declval<F>()}));
+};
+
+// Result type of callable F.
+template <class F>
+using ResultType = typename TypeSolver<F>::ResultType;
+
+// Arguments of callable F as a tuple.
+template <class F>
+using ArgumentTypes = typename TypeSolver<F>::ArgumentTypes;
+
+// I'th argument type of callable F.
+template <size_t I, class F>
+using ArgumentType = std::tuple_element_t<I, ArgumentTypes<F>>;
+
+// std::true_type if callable F is noexcept, otherwise std::false_type.
+template <class F>
+using NoExceptType = typename TypeSolver<F>::NoExceptType;
+
+// Threadpool for starting threads and leaving them idle waiting for work.
+template <class Func>
+class ThreadPool
+{
+  Func _func;       // Worker function which the worker threads will call.
+
+  std::atomic_size_t _numTasksStarted = 0;  // Number of tasks in progress
+  std::atomic_size_t _exceptionCount = 0;   // Number of exceptions thrown
+  std::size_t _numAllTasks = 0;             // Total number of tasks to be done (i.e. the length of input vector)
+  bool _go = false;                         // True if run() method has given tasks to threads.
+  bool _destructorCalled = false;           // ThreadPool is being destructed.
+  int _numThreadsRunning = 0;               // Number of active threads (i.e. not waiting in a condition variable)
+  int _threadCount = 0;                     // Number of threads in the pool.
+
+  std::condition_variable _cvStart;         // cv where the worker threads are waiting for work
+  std::condition_variable _cvEnd;           // cv where the main thread is waiting the the work to finish.
+  std::mutex _mtx;
+  StopToken _stopToken;     // Pointer to the token may be passed to work functions.
+
+  std::exception_ptr _pException;       // Pointer to possible exception thrown by a worker function.
+  std::vector<std::thread> _threads;    // Worker threads
+
+  // Number of input arguments in the function
+  static constexpr size_t _numArgs = std::tuple_size<ArgumentTypes<Func>>{};
+
+  // True if the first argument of the user's function is a stop token.
+  static constexpr bool _bUseStopToken = (_numArgs == 2) && std::is_same_v<ArgumentType<0, Func>, StopToken*>;
+
+  using InputType = ArgumentType<_bUseStopToken, Func>;
+  using OutputType = ResultType<Func>;
+
+  // Pointers to the beginnings of input and output data arrays
+  const InputType* _pInput = nullptr;
+  OutputType * _pOutput = nullptr;
+
+  // The function does not return a value?
+  static constexpr bool _bVoid = std::is_same_v<OutputType, void>;
+
+public:
+  ThreadPool(Func func, int numThreads = 0) : _func(func)
+  {
+    static_assert(_numArgs == 1 || _bUseStopToken,
+                  "The function must either take one input argument or a stop_token pointer and an input argument");
+    _threadCount = (numThreads <= 0) ? std::thread::hardware_concurrency() : numThreads;
+    _threads.reserve(_threadCount);
+
+    // Worker to run in each thread of the thread pool.
+    auto worker = [this] {
+      while(true)
+        {
+          {
+            std::unique_lock<std::mutex> lk(_mtx);
+            _cvStart.wait(lk, [this]{return _go || _destructorCalled;});
+            if (_go)
+              ++_numThreadsRunning; // This many threads are not waiting in _cvStart
+            if (_destructorCalled)
+              return;
+          }
+
+          // Make local copies to avoid indirect access in the loop
+          const auto numAllTasks = _numAllTasks;
+          auto pInput = _pInput;
+          auto pOutput = _pOutput;
+
+          do {
+            // The input will be read and output stores at this index.
+            auto index = _numTasksStarted.fetch_add(1);
+            if (index < numAllTasks) {
+              try {
+                if constexpr (_bUseStopToken) {
+                    if constexpr (_bVoid)
+                        _func(&_stopToken, pInput[index]);
+                    else
+                        pOutput[index] = _func(&_stopToken, pInput[index]);
+                } else {
+                    if constexpr (_bVoid)
+                        _func(pInput[index]);
+                    else
+                        pOutput[index] = _func(pInput[index]);
+                }
+              }
+              catch (...) {
+                if (_exceptionCount++ == 0) // Only one exception will be stored
+                  _pException = std::current_exception();
+              } // catch
+            } // if
+          } while (_numTasksStarted.load() < numAllTasks);
+
+          // Note: None of the worker threads will come to this point
+          //       until all the work has been done (i.e. _numTasksStarted >= numAllTasks)
+          bool bWasLast;
+          {
+            const std::lock_guard<std::mutex> lock(_mtx);
+            _go = false;
+            // True if this is the last thread that finished the do - while loop above.
+            bWasLast = (--_numThreadsRunning == 0);
+          }
+
+          if (bWasLast)
+            _cvEnd.notify_one();
+        }
+    }; // worker
+
+    // Start the threads.
+    for (int i = 0; i < _threadCount; ++i)
+      _threads.push_back(std::thread(worker));
+  }
+
+  ~ThreadPool()
+  {
+    {
+      std::lock_guard<std::mutex> lk(_mtx);
+      _destructorCalled = true;
+    }
+    // Notify thr workers that we are dying.
+    _cvStart.notify_all();
+
+    for(std::thread& thr : _threads)
+        if (thr.joinable())
+            thr.join();
+  }
+
+  // Give workers numElements items of work. The inputs are in the array pointed by pIn
+  // and the output goes to the array pointed by pOut.
+  // Returns the number of finished tasks which should be the same as numElements.
+  void run(const InputType* pIn, OutputType* pOut, size_t numElements)
+  {
+    if (numElements == 0)
+        return;
+
+    if constexpr (_bUseStopToken)
+        _stopToken.setValue(0);
+
+    {
+      const std::lock_guard<std::mutex> lock(_mtx);
+      _numTasksStarted = 0;
+      _exceptionCount = 0;
+      _numAllTasks = numElements;
+      _numThreadsRunning = 0;
+      _pInput = pIn;
+      _pOutput = pOut;
+      _pException = nullptr;
+      _go = true;   // Set the running state from idle to active.
+    }
+
+    // Let the workers know that there is _numAllTasks items of work to do.
+    _cvStart.notify_all();
+    {  // Wait until all threads are back to idle state.
+        std::unique_lock<std::mutex> lk(_mtx);
+        _cvEnd.wait(lk, [this]{ return _go == false && _numThreadsRunning==0; });
+        _numAllTasks = 0;
+    }
+
+    // Deal with possible exception.
+    if (_pException)
+        std::rethrow_exception(_pException);
+  }
+}; // class ThreadPool
+
 
 // A promise-like object which is always allocated from the stack.
 // If holds an other promise and the function which is applied
@@ -179,7 +385,7 @@ template <class Prom, class Func>
 class Promise
 {
 public:
-  Promise(Prom p, Func f) : _prom(p), _fun(f){};
+  Promise(Prom p, Func f) : _prom(p), _fun(f) {};
 
   // Overload for _fun with parameters
   template <class... V>
@@ -516,7 +722,7 @@ auto future()
 
 // Calls get() on the given futures and returns the values as a tuple.
 // The set of futures and their states are also tuples.
-template <class Futures, class States, std::size_t... I>
+template <class Futures, class States, size_t... I>
 auto getResults(Futures&& futs, States&& states, std::index_sequence<I...>)
 {
   return std::make_tuple(std::get<I>(futs).get(std::get<I>(states))...);
@@ -532,7 +738,7 @@ auto runFutures(Futs&&... fs)
 }
 
 // Helper function for sorting out the index sequence for the tuple of futures.
-template <class FutTuple, std::size_t... I>
+template <class FutTuple, size_t... I>
 auto runParallelAsTuple(FutTuple&& futs, std::index_sequence<I...>)
 {
   static_assert(std::tuple_size_v<FutTuple> == sizeof...(I), "Index sequence doesn't match.");
@@ -651,7 +857,7 @@ auto runForAll(const Vec& vecX, Func&& func)
                 pException = std::current_exception();
             }
           } // if
-        } while (szNumStartedTasks.load() <= vecX.size());
+        } while (szNumStartedTasks.load() < vecX.size());
       };  // worker
 
       if constexpr (MaxThreads > 0) { // Threadpool is an array of threads living in stack.
@@ -664,7 +870,7 @@ auto runForAll(const Vec& vecX, Func&& func)
               thr.join();
       }
       else { // Threadpool is a vector of threads living in heap.
-        auto uNumThreads = std::min(std::size_t(std::thread::hardware_concurrency()), vecX.size());
+        auto uNumThreads = std::min(size_t(std::thread::hardware_concurrency()), vecX.size());
         std::vector<std::thread> vecThreadPool(uNumThreads);
         for (auto& thr : vecThreadPool)
             thr = std::thread(worker);
@@ -695,10 +901,10 @@ auto runForAll(const Vec& vecX, Func&& func)
 }
 
 // Helper for array overload of runForAll(...)
-template <class Arr, std::size_t... I, class Func>
+template <class Arr, size_t... I, class Func>
 auto runForAllInArray(const Arr& arrX, Func&& func, std::index_sequence<I...>)
 {
-  constexpr std::size_t N = sizeof...(I);
+  constexpr size_t N = sizeof...(I);
   using U = typename Arr::value_type; // input type
 
   // The functions take stop token as the first parameter
@@ -730,7 +936,7 @@ auto runForAllInArray(const Arr& arrX, Func&& func, std::index_sequence<I...>)
 // Executes "y = func(x)" for each x in array arrX in a separate thread.
 // There will be as many parallel threads as there are elements in the array.
 // Returns an array of y's.
-template <int MaxThreads = 0, class U, std::size_t N, class Func>
+template <int MaxThreads = 0, class U, size_t N, class Func>
 auto runForAll(const std::array<U, N>& arrX, Func&& func)
 {
   return runForAllInArray(arrX, std::forward<Func>(func), std::make_index_sequence<N>{});
@@ -778,7 +984,7 @@ auto runForAll(const std::vector<U>& x, F1&& f1, F2&& f2, Funcs&&... funcs)
 
 // Note: MaxThreads template parameter is ignored.
 // There are always as many threads as there are elements in the array.
-template <int MaxThreads = 0, class U, std::size_t N, class F1, class F2, class... Funcs>
+template <int MaxThreads = 0, class U, size_t N, class F1, class F2, class... Funcs>
 auto runForAll(const std::array<U, N>& arrX, F1&& f1, F2&& f2, Funcs&&... funcs)
 {
   auto nestedFuncs = [&f1, &f2, &funcs...](auto t) { return nested(t, f1, f2, funcs...); };
