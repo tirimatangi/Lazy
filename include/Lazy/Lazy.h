@@ -25,6 +25,8 @@
 namespace Lazy
 {
 
+/*
+// Prints the arguments to std::cout. Uncomment if still needed.
 template <class... Args>
 void atomic_print(Args&&... args)
 {
@@ -32,6 +34,7 @@ void atomic_print(Args&&... args)
     (ss << ... << args) << '\n';
     std::cout << ss.str();
 }
+*/
 
 using std::size_t;
 
