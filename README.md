@@ -243,11 +243,13 @@ multiplier = 1000000, vecOut[first] = 2.71828e+06, vecOut[last] = 367907
 
 ### 3. Use futures and continuations in manual mode
 
-You can define the futures and the continuations they will run manually.
-The first function in the chain of continuations can have any number of input parameters which are passed to function `Lazy::future<ReturnType>(...)`.
-`ReturnType` is the return type of the last function in the chain of continuations (like in std::future).
+You can also define the futures and the continuations and launch them manually at proper places.
+The chain of continuations is defined by calling `Lazy::future<ReturnType>(args...)`.
+The given arguments are passed to the first continuation function.<br>
+`ReturnType` is the return type of the last function in the chain of continuations (like in std::future).<br>
+The thread running the continuation is started by calling method `run` and the result is collected with `get`.
 
-Here is an example on launching the tasks and getting the results once they become available.
+Here is an example on launching the tasks and getting the results as they become available.
 
 ```c++
     // Define future #1:
@@ -315,7 +317,17 @@ Calling g.run...
 Future f returned 8.88819
 Future g returned { 2 4 8 16 32 64 128 256 512 1024 }
 ```
-For more examples on how to use `Lazy::future` manually, see [example-3.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-3.cc).
+For more examples on how to use `Lazy::future` manually, see [example-3.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-3.cc) and [example-mergesort.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-mergesort.cc).
+
+Mergesort gives a practical example on how parallelism can help sort large arrays significantly faster.
+You can copy and paste lines 1-99 in [example-mergesort.cc](https://github.com/tirimatangi/Lazy/blob/main/examples/example-mergesort.cc) to your own code for a fast parallel vector sorter with prototype:
+
+```c++
+// Sorts the vector in non-descending order.
+// The order of equal elements is not guaranteed to be preserved.
+template <class T>
+void mergeSort(std::vector<T>& vec);
+```
 
 ## Compilation
 
